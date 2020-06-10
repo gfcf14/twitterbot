@@ -31,6 +31,7 @@ def create_api():
   user = api.me()
 
   logger.info('Successfully created API for ' + user.screen_name)
+
   return api
 
 # gets the last post id made by the bot
@@ -39,48 +40,59 @@ def get_latest_post(api):
 
 # gets a random joke from the rapidapi
 def get_joke(key):
-  url = "https://joke3.p.rapidapi.com/v1/joke"
+  extra_text_len = 21
+  max_username_len = 15
+  max_tweet_len = 280
+  url = 'https://joke3.p.rapidapi.com/v1/joke'
 
-  payload = "{}"
+  payload = '{}'
   headers = {
     'x-rapidapi-key': key,
   }
-  params = { }
-  response = requests.request("GET", url, data=payload, headers=headers, params=params)
-  json_dict = json.loads(response.text)
-  return json_dict.get('content')
+  params = {}
+
+  joke_text = ''
+
+  while True:
+    response = requests.request("GET", url, data=payload, headers=headers, params=params)
+    json_dict = json.loads(response.text)
+    joke_text = json_dict.get('content')
+
+    # ensure the fetched joke doesn't exceed the twitter max length
+    if (len(joke_text) + extra_text_len + max_username_len) < max_tweet_len:
+      break
+
+  return joke_text
 
 # check the latest mentions of the bot, and reply to each. For now, via a simple random number generator
-def check_mentions(api, keywords, since_id, rapid_api_key):
+def check_mentions(api, since_id, rapid_api_key):
   new_since_id = since_id
 
   # iterate over the 20 most recent mentions of the bot according to the since_id
   for tweet in tweepy.Cursor(api.mentions_timeline, since_id=since_id).items():
+    # get the mentioner's handle
+    mentioner = tweet.author.screen_name
+
     # get the new since_id in order to avoid searching on older tweets
     new_since_id = max(tweet.id, new_since_id)
 
     # to avoid tweets that are replies
     if tweet.in_reply_to_status_id is not None:
       continue
-    if any(keyword in tweet.text.lower() for keyword in keywords):
-      # get the mentioner's handle
-      mentioner = tweet.author.screen_name
-      logger.info('Found answerable tweet from ' + mentioner + ' with text: ' + tweet.text)
 
-      request = tweet.text.lower()
-      reply = ''
+    request = tweet.text.lower()
+    reply = ''
 
-      if 'number please' in request:
-        reply = 'Here is your number: ' + str(random.randint(1,101))
-      elif 'joke please' in request:
-        reply = 'Here is your joke: ' + str(get_joke(rapid_api_key))
+    if 'joke please' in request:
+      reply = '@' + mentioner + ' Here is your joke: ' + str(get_joke(rapid_api_key))
+    else:
+      reply = 'Hi, @' + mentioner + ' ! I don\'t understand your request. If you write the words \'joke please\', somewhere, I\'ll send you a good one!!'
 
-      logger.info(reply)
-      # reply with a mention to the user
-      api.update_status(
-        status="@" + mentioner + ' ' + reply,
-        in_reply_to_status_id=tweet.id,
-      )
+    logger.info('Replying: ' + reply)
+
+    # reply to the user
+    api.update_status(status=reply, in_reply_to_status_id=tweet.id)
+
   return new_since_id
 
 # main function
@@ -93,9 +105,9 @@ def main():
   rapid_api_key = os.getenv('RAPID_API_KEY')
 
   while True:
-    since_id = check_mentions(api, ['number please', 'joke please'], since_id, rapid_api_key)
+    since_id = check_mentions(api, since_id, rapid_api_key)
     logger.info('Waiting for someone to mention me...')
-    time.sleep(10)
+    time.sleep(20)
 
 if __name__ == "__main__":
   main()
