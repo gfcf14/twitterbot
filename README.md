@@ -1,6 +1,6 @@
 # TWITTER BOT
 
-A python twitterbot made to familiarize with the simple development of a bot in python
+A python twitterbot made to familiarize with the simple development of a bot in python, hosted on Heroku
 
 # USAGE
 
