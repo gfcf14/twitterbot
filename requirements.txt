@@ -1,7 +1,2 @@
-json
-logging
-os
-random
-requests
-time
+python-dotenv
 tweepy==3.8.0
