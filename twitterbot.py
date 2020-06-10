@@ -1,7 +1,9 @@
 # libraries to log in to twitter
+import json
 import logging
 import os
 import random
+import requests
 import time
 import tweepy
 from dotenv import find_dotenv, load_dotenv
@@ -35,8 +37,21 @@ def create_api():
 def get_latest_post(api):
   return api.me().status.id
 
+# gets a random joke from the rapidapi
+def get_joke(key):
+  url = "https://joke3.p.rapidapi.com/v1/joke"
+
+  payload = "{}"
+  headers = {
+    'x-rapidapi-key': key,
+  }
+  params = { }
+  response = requests.request("GET", url, data=payload, headers=headers, params=params)
+  json_dict = json.loads(response.text)
+  return json_dict.get('content')
+
 # check the latest mentions of the bot, and reply to each. For now, via a simple random number generator
-def check_mentions(api, keywords, since_id):
+def check_mentions(api, keywords, since_id, rapid_api_key):
   new_since_id = since_id
 
   # iterate over the 20 most recent mentions of the bot according to the since_id
@@ -51,11 +66,19 @@ def check_mentions(api, keywords, since_id):
       # get the mentioner's handle
       mentioner = tweet.author.screen_name
       logger.info('Found answerable tweet from ' + mentioner + ' with text: ' + tweet.text)
-      rand_num = random.randint(1,101)
 
+      request = tweet.text.lower()
+      reply = ''
+
+      if 'number please' in request:
+        reply = 'Here is your number: ' + str(random.randint(1,101))
+      elif 'joke please' in request:
+        reply = 'Here is your joke: ' + str(get_joke(rapid_api_key))
+
+      logger.info(reply)
       # reply with a mention to the user
       api.update_status(
-        status="@" + mentioner + " Here is your number: " + str(rand_num),
+        status="@" + mentioner + ' ' + reply,
         in_reply_to_status_id=tweet.id,
       )
   return new_since_id
@@ -66,11 +89,13 @@ def main():
   api = create_api()
   # declare variable to get latest post id
   since_id = get_latest_post(api)
+  # get the RapidApi key
+  rapid_api_key = os.getenv('RAPID_API_KEY')
 
   while True:
-    since_id = check_mentions(api, ["random"], since_id)
+    since_id = check_mentions(api, ['number please', 'joke please'], since_id, rapid_api_key)
     logger.info('Waiting for someone to mention me...')
-    time.sleep(60)
+    time.sleep(10)
 
 if __name__ == "__main__":
   main()
